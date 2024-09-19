@@ -1,3 +1,4 @@
+import { isBuiltin } from 'node:module'
 import { defineConfig } from 'astro/config'
 import unocss from 'unocss/astro'
 import solidJs from '@astrojs/solid-js'
@@ -65,5 +66,10 @@ export default defineConfig({
       process.env.OUTPUT === 'vercel' && disableBlocks(),
       process.env.OUTPUT === 'netlify' && disableBlocks(),
     ],
+    build: {
+      rollupOptions: {
+        external: isBuiltin
+      }
+    }
   },
 })
