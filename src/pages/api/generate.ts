@@ -10,7 +10,7 @@ const passList = sitePassword.split(',') || []
 
 const client = new OpenAI({ baseURL: baseUrl, apiKey });
 
-export const post: APIRoute = async(context) => {
+export const POST: APIRoute = async(context) => {
   const body = await context.request.json()
   const { sign, time, messages, pass, temperature } = body
   if (!messages) {
