@@ -1,15 +1,14 @@
-// #vercel-disable-blocks
-import { ProxyAgent, fetch } from 'undici'
-// #vercel-end
-import { generatePayload, parseOpenAIStream } from '@/utils/openAI'
 import { verifySignature } from '@/utils/auth'
+import OpenAI from 'openai'
 import type { APIRoute } from 'astro'
 
 const apiKey = import.meta.env.OPENAI_API_KEY
-const httpsProxy = import.meta.env.HTTPS_PROXY
 const baseUrl = ((import.meta.env.OPENAI_API_BASE_URL) || 'https://api.openai.com').trim().replace(/\/$/, '')
+export const model = import.meta.env.OPENAI_API_MODEL || 'gpt-3.5-turbo'
 const sitePassword = import.meta.env.SITE_PASSWORD || ''
 const passList = sitePassword.split(',') || []
+
+const client = new OpenAI({ baseURL: baseUrl, apiKey });
 
 export const post: APIRoute = async(context) => {
   const body = await context.request.json()
@@ -35,23 +34,28 @@ export const post: APIRoute = async(context) => {
       },
     }), { status: 401 })
   }
-  const initOptions = generatePayload(apiKey, messages, temperature)
-  // #vercel-disable-blocks
-  if (httpsProxy)
-    initOptions.dispatcher = new ProxyAgent(httpsProxy)
-  // #vercel-end
 
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error
-  const response = await fetch(`${baseUrl}/v1/chat/completions`, initOptions).catch((err: Error) => {
-    console.error(err)
-    return new Response(JSON.stringify({
-      error: {
-        code: err.name,
-        message: err.message,
-      },
-    }), { status: 500 })
-  }) as Response
+  const response = await client.chat.completions.create({
+      messages,
+      model,
+      temperature,
+      stream: true
+    });
 
-  return parseOpenAIStream(response) as Response
+  const stream = new ReadableStream({
+    async start(controller) {
+      for await (const chunk of response) {
+        for (const choice of chunk.choices) {
+          if (choice.delta.content) {
+            controller.enqueue(choice.delta.content);
+          }
+        }
+      }
+      controller.close();
+    }
+  });
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/plain' }
+  });
 }
